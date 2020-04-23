@@ -94,24 +94,6 @@ class Block:
     def chooseRandomCrop(self):
         rID = random.randrange(0, len(self.possible_crops))
         self.choosenCrop = self.possible_crops[rID]
-        # -----TODO--------
-        '''
-        iClass = random.randrange(0, len(blockMap))
-        print('iClass', iClass)
-        if countClass[iClass] == 0:
-            notZeroClass = filter((1).__le__, countClass)
-            # all instances has been used out
-            if not notZeroClass:
-                return
-            nums = random.choice(notZeroClass)
-            iClass = countClass.index(nums)
-        print('length', len(blockMap))
-        iPoly = random.randrange(0, len(blockMap[iClass]))
-        self.choosenCrop = blockMap[iClass][iPoly]
-        countClass[iClass] -= 1
-        '''
-
-    # get object
 
 
 class Histogram():
@@ -202,18 +184,22 @@ class NewImage:
     IMAGE_HEIGHT = 2054  # pixels
     IMAGE_WIDTH = 2456
     count = 20
-    csvFile = CsvFile('E:/Python_WS/Masterarbeit/test_labels')  #
+    csvFile = CsvFile('C:/Users/SSyla/Desktop/毕设/masterarbeit/Masterarbeit/AL_test/test_labels')  #
 
     def __init__(self, choosenBlocks):
         # -----TODO----- background need change
-        self.background = Image.new('RGB', (IMAGE_WIDTH, IMAGE_HEIGHT), (0, 0, 0))
+        fileList = ['bg1.jpg', 'bg2.png', 'bg3.png']
+        # self.background = Image.new('RGB', (IMAGE_WIDTH, IMAGE_HEIGHT), (0, 0, 0))
+        bgId = fileList[random.choice([0,1,2])]
+        im = Image.open(os.path.join('background', bgId)).convert('RGBA')
+        self.background = im.resize((IMAGE_WIDTH, IMAGE_HEIGHT))
         self.crops = []
         # self.choosenBlocks = choosenBlocks
         for block in choosenBlocks:
             self.crops.append(
                 {'label': block.label, 'im': block.choosenCrop['crop'],
                  'polygonCoordinates': block.choosenCrop['polygonCoordinates'],
-                 'bboxCenter': block.choosenCrop['bboxCenter']})
+                 'bboxCenter': block.choosenCrop['bboxCenter'], 'bbox': block.choosenCrop['bbox']})
         self.filename = str(self.count)
         NewImage.count += 1
 
@@ -222,13 +208,13 @@ class NewImage:
         i = random.randint(0, 36)
         angle = 10 * i
         rotatedCrop = crop['im'].rotate(angle, expand=True)
+        # rotatedCrop.show()
         return rotatedCrop, angle
 
     # rotate old polygon coordinates with the same angle used for crop rotation
     def rotatePolygon(self, points, center, angle):
         angle = - angle * scipy.pi / 180  # in radian
-        return scipy.dot(scipy.array(points) - list(center), scipy.array(
-            [[scipy.cos(angle), scipy.sin(angle)], [-scipy.sin(angle), scipy.cos(angle)]])) + center
+        return scipy.dot(scipy.array(points) - list(center), scipy.array([[scipy.cos(angle), scipy.sin(angle)], [-scipy.sin(angle), scipy.cos(angle)]])) + center
 
     # check if two bounding box are overlaping (after rotation)
     def doOverlap(self, crop1, crop2):
@@ -260,51 +246,73 @@ class NewImage:
     # find appropriate random positions for the choosen blocks and save image
     def adaptCrop(self):
         self.cropsToPaste = []
-        freeRegion = np.ones((IMAGE_WIDTH, IMAGE_HEIGHT))
+        freeRegion1 = np.ones((IMAGE_HEIGHT, IMAGE_WIDTH))
         # add first element in random position
+        print('first crop')
         tmpCrop = {}
-        tmpCrop['label'], tmpCrop['oldCenter'], [tmpCrop['im'], tmpCrop['angle']] = self.crops[0]['label'], self.crops[0]['bboxCenter'], self.randomRotate(self.crops[0])
-        rotatedPolygonCoor = self.rotatePolygon(self.crops[0]['polygonCoordinates'], self.crops[0]['bboxCenter'],
-                                                tmpCrop['angle'])
-        tmpCrop.update(self.randomTranslate(tmpCrop,freeRegion))
+        tmpCrop['label'], [tmpCrop['im'], tmpCrop['angle']] = self.crops[0]['label'], self.randomRotate(self.crops[0])
+        rotatedPolygonCoor = self.rotatePolygon(self.crops[0]['polygonCoordinates'], self.crops[0]['bboxCenter'], tmpCrop['angle'])
+        [upperLeft, lowerRight] = Block.getBoundingbox(self, rotatedPolygonCoor)
+        print('upperLeft', upperLeft)
+        bboxSizeW = lowerRight[0] - upperLeft[0]
+        bboxSizeH = lowerRight[1] - upperLeft[1]
+        centerX = (lowerRight[0] + upperLeft[0]) // 2
+        centerY = (lowerRight[1] + upperLeft[1]) // 2
+        tmpCrop['oldCenter'] = [centerX, centerY]
+
+        freeRegion1[:, IMAGE_WIDTH - bboxSizeW:] = 0
+        freeRegion1[IMAGE_HEIGHT - bboxSizeH:, :] = 0
+        tmpCrop.update(self.randomTranslate(tmpCrop, freeRegion1, bboxSizeW, bboxSizeH))
         tmpCrop['newPolygon'] = self.defNewPolygCoordinate(rotatedPolygonCoor, tmpCrop)
         tmpCrop['newBbox'] = Block.getBoundingbox(self, tmpCrop['newPolygon'])
-
+        print('newbbox', tmpCrop['newBbox'])
+        
         self.cropsToPaste.append(tmpCrop)
-        freeRegion[tmpCrop['x_min']:tmpCrop['x_max'] +1, tmpCrop['y_min']:tmpCrop['y_max']+1] = 0
+        print('---> first crop done')
+
+        # freeRegion[tmpCrop['x_min']:tmpCrop['x_max'] +1, tmpCrop['y_min']:tmpCrop['y_max']+1] = 0
         # check overlapping in case of multiple blocks
         if len(self.crops) != 1:
             for crop in self.crops[1:]:
-                tmpCrop = {}
-                tmpCrop['label'], tmpCrop['oldCenter'], [tmpCrop['im'], tmpCrop['angle']] = crop['label'], crop[
-                    'bboxCenter'], self.randomRotate(crop)
-                tmpCrop.update(self.randomTranslate(tmpCrop, freeRegion))
-                freeRegion[tmpCrop['x_min']:tmpCrop['x_max'] + 1, tmpCrop['y_min']:tmpCrop['y_max'] + 1] = 0
-                tmpCrop['newPolygon'] = self.defNewPolygCoordinate(rotatedPolygonCoor, tmpCrop)
-                tmpCrop['newBbox'] = Block.getBoundingbox(self, tmpCrop['newPolygon'])
-                self.cropsToPaste.append(tmpCrop)
-
-                '''
-                try different positions till getting the right one (100 tries)
-                If after 100 tries no appropriate position has been found, drop the crop and move to the next
-                
-                i = 0
-                while i < 100 and self.doMultipleOverlap(tmpCrop, self.cropsToPaste):
+                flag = 1
+                while flag:
+                    freeRegion = np.ones((IMAGE_HEIGHT, IMAGE_WIDTH))
                     tmpCrop = {}
-                    tmpCrop['label'], tmpCrop['oldCenter'], [tmpCrop['im'], tmpCrop['angle']] = crop['label'], crop[
-                        'bboxCenter'], self.randomRotate(crop)
-                    tmpCrop.update(self.randomTranslate(tmpCrop))
-                    i += 1
-                if i != 100:
-                    rotatedPolygonCoor = self.rotatePolygon(crop['polygonCoordinates'], crop['bboxCenter'],
-                                                            tmpCrop['angle'])
-                    tmpCrop['newPolygon'] = self.defNewPolygCoordinate(rotatedPolygonCoor, tmpCrop)
-                    tmpCrop['newBbox'] = Block.getBoundingbox(self, tmpCrop['newPolygon'])
-                    self.cropsToPaste.append(tmpCrop)
-                else:
-                    # continue to the next crop if right position wasnt found
-                    continue
-                '''
+                    tmpCrop['label'], [tmpCrop['im'], tmpCrop['angle']] = crop['label'],  self.randomRotate(crop)
+                    rotatedPolygonCoor = self.rotatePolygon(crop['polygonCoordinates'], crop['bboxCenter'], tmpCrop['angle'])
+                    # calculate the new bounding box after rotation
+                    print('old center', crop['bboxCenter'])
+                    [upper_left, lower_right] = Block.getBoundingbox(self, rotatedPolygonCoor)
+                    bboxW = lower_right[0] - upper_left[0]
+                    bboxH = lower_right[1] - upper_left[1]
+                    centerX = (lower_right[0] + upper_left[0]) // 2
+                    centerY = (lower_right[1] + upper_left[1]) // 2
+                    tmpCrop['oldCenter'] = [centerX, centerY]
+                    freeRegion[:, IMAGE_WIDTH - bboxW:] = 0
+                    freeRegion[IMAGE_HEIGHT - bboxH:, :] = 0
+                    for existCrop in self.cropsToPaste:
+                        upperPoint, lowerPoint = existCrop['newBbox']
+                        shiftX = upperPoint[0] - bboxW if upperPoint[0] - bboxW > 0 else 0
+                        shiftY = upperPoint[1] - bboxH if upperPoint[1] - bboxH > 0 else 0
+                        print('shiftX & Y', shiftX, shiftY)
+                        freeRegion[shiftY:lowerPoint[1], shiftX:lowerPoint[0]] = 0
+
+                    print(np.sum(freeRegion))
+                    if np.sum(freeRegion) != 0:
+                        flag = 0
+                        tmpCrop.update(self.randomTranslate(tmpCrop, freeRegion, bboxW, bboxH))
+                        tmpCrop['newPolygon'] = self.defNewPolygCoordinate(rotatedPolygonCoor, tmpCrop)
+                        tmpCrop['newBbox'] = Block.getBoundingbox(self, tmpCrop['newPolygon'])
+                        self.cropsToPaste.append(tmpCrop)
+                    else:
+                        flag += 1
+                    '''
+                    try different positions till getting the right one (100 tries)
+                    If after 100 tries no appropriate position has been found
+                    retry all crops again
+                    '''
+                    if flag > 100:
+                        return NewImage.adaptCrop(self)
 
         print('\n\nFINAL CROPS TO PASTE' + str(self.cropsToPaste) + '\n\n')
         print('\n\n\n NEW IMAGE \n\n\n')
@@ -318,7 +326,7 @@ class NewImage:
 
     # draw new bbox and transformated polygons to validate the labeling
     def drawBoxes(self, imFilename, cropsToPaste):
-        image = cv2.imread('labeled_images/' + imFilename + '.png')
+        image = cv2.imread('test/' + imFilename + '.png')
         for block in cropsToPaste:
             cv2.rectangle(image, (block['newBbox'][0][0], block['newBbox'][1][1]),
                           (block['newBbox'][1][0], block['newBbox'][0][1]), color=(0, 0, 255), thickness=2)
@@ -332,63 +340,26 @@ class NewImage:
     def pasteCrops(self):
         for crop in self.cropsToPaste:
             # self.background.paste(crop['im'].convert('RGBA'), (crop['x_min'], crop['y_min']))
-            self.background.paste(crop['im'], mask=crop['im'].split()[3], box=(crop['x_min'], crop['y_min']))
+            imgCenterX , imgCenterY = crop['oldCenter'][0] + crop['x_trans'] ,crop['oldCenter'][1] + crop['y_trans']
+            posX = imgCenterX - (crop['im'].size[0] //2)
+            posY = imgCenterY - (crop['im'].size[1] //2)
+            self.background.paste(crop['im'], mask=crop['im'].split()[3], box=(posX, posY)) # crop['newBbox'][0]
         self.saveImage()
 
     # Define random translation and make sure the crop is completely inside the image
-    def randomTranslate(self, crop, freeRegion):
-        '''
-        tmpCrop = {}
-        tmpCrop['x_min'], tmpCrop['y_min'] = random.randint(
-            0, self.background.size[0] - crop['im'].size[0]), random.randint(0,
-                                                                             self.background.size[1] - crop['im'].size[
-                                                                                 1])
-        tmpCrop['x_max'], tmpCrop['y_max'] = tmpCrop['x_min'] + \
-                                             crop['im'].size[0], tmpCrop['y_min'] + crop['im'].size[1]
-        tmpCrop['newCenter'] = ((tmpCrop['x_min'] + tmpCrop['x_max']) / 2, (tmpCrop['y_min'] + tmpCrop['y_max']) / 2)
-        tmpCrop['x_trans'], tmpCrop['y_trans'] = tmpCrop['newCenter'][0] - crop['oldCenter'][0], tmpCrop['newCenter'][
-            1] - crop['oldCenter'][1]
-        return tmpCrop
-        '''
-        tmpCrop = {}
-        noOverlap = False
-        tmpFreeRegion = freeRegion[:]
-        # Second crops and further
-        if self.cropsToPaste:
-            countLoop = 0
-            while not noOverlap:
-                countLoop += 1
-                print('第%d次尝试'%countLoop)
-                # Select a random center of new crops
-                # update rest possible regions
-                print(np.ndim(freeRegion))
-                print(np.ndim(tmpFreeRegion))
-                tmpCrop['x_min'], tmpCrop['y_min'] = random.choice(np.transpose(np.nonzero(tmpFreeRegion)))
-                print('X = ', tmpCrop['x_min'])
-                print('Y = ', tmpCrop['y_min'])
-                # tmpCrop['x_min'] = random.choice(np.nonzero(tmpFreeRegion))[0]
-                # tmpCrop['y_min'] = random.choice(np.nonzero(tmpFreeRegion))[1]
-                # tmpCrop['x_min'], tmpCrop['y_min'] = random.randint(0, self.background.size[0] - crop['im'].size[0]), random.randint(0, self.background.size[1] - crop['im'].size[1])
-                tmpCrop['x_max'], tmpCrop['y_max'] = tmpCrop['x_min'] + crop['im'].size[0], tmpCrop['y_min'] + crop['im'].size[1]
-                if not self.doMultipleOverlap(tmpCrop, self.cropsToPaste) and tmpCrop['x_max'] <= IMAGE_WIDTH and tmpCrop['y_max'] <= IMAGE_HEIGHT:
-                    noOverlap = True
-                    tmpCrop['newCenter'] = (
-                        (tmpCrop['x_min'] + tmpCrop['x_max']) / 2, (tmpCrop['y_min'] + tmpCrop['y_max']) / 2)
-                else:
-                    tmpFreeRegion[tmpCrop['x_min'], tmpCrop['y_min']] = 0
-        # For the first crop
-        else:
-            print("//= . =///第一次我怎么会死循环")
-            tmpCrop['x_min'], tmpCrop['y_min'] = random.randint(0, self.background.size[0] - crop['im'].size[
-                0]), random.randint(0, self.background.size[1] - crop['im'].size[1])
-            tmpCrop['x_max'], tmpCrop['y_max'] = tmpCrop['x_min'] + crop['im'].size[0], tmpCrop['y_min'] + \
-                                                 crop['im'].size[1]
-            tmpCrop['newCenter'] = (
-            (tmpCrop['x_min'] + tmpCrop['x_max']) / 2, (tmpCrop['y_min'] + tmpCrop['y_max']) / 2)
+    def randomTranslate(self, crop, freeRegion, bbx, bby):
 
-        tmpCrop['x_trans'], tmpCrop['y_trans'] = tmpCrop['newCenter'][0] - crop['oldCenter'][0], tmpCrop['newCenter'][
-            1] - crop['oldCenter'][1]
+        tmpCrop = {}
+        tmpCrop['y_min'], tmpCrop['x_min'] = random.choice(np.transpose(np.nonzero(freeRegion)))
+        print('X = ', tmpCrop['x_min'])
+        print('Y = ', tmpCrop['y_min'])
+
+        tmpCrop['x_max'], tmpCrop['y_max'] = tmpCrop['x_min'] + bbx, tmpCrop['y_min'] + bby
+        tmpCrop['newCenter'] = ((tmpCrop['x_min'] + tmpCrop['x_max']) // 2, (tmpCrop['y_min'] + tmpCrop['y_max']) // 2)
+        tmpCrop['x_trans'], tmpCrop['y_trans'] = tmpCrop['newCenter'][0] - crop['oldCenter'][0], tmpCrop['newCenter'][1] - crop['oldCenter'][1]
+
         return tmpCrop
+
 
     def saveImage(self):
         # self.background.show()
@@ -396,19 +367,32 @@ class NewImage:
 
 
 # choose random blocks from the list
-def chooseRandomBlocks(Blocklist, countImgList):
+def chooseRandomBlocks(Blocklist, labels_to_id):
     # 5 is max number of blocks to have on a picture
-    # To keep the instance will be used out in certain loops
+    # To keep the instance will be used out in certain loopsC
     # Instances in each image is 3-5
+    choose_blocks = []
+    global countImgList
+    global countClass
     notZeroRdList = filter((1).__le__, countImgList)
     if not notZeroRdList:
         return
     i = random.choice(list(notZeroRdList))
     idx = countImgList.index(i)
     countImgList[idx] -= 1
-    rdIdx = idx + 3
-    print('Numbers of choosen Blocks = ' + str(rdIdx))
-    return random.sample(Blocklist, k=rdIdx) # py3.5 choice
+    rdNums = idx + 3
+    print('Numbers of choosen Blocks = ' + str(rdNums))
+    while rdNums:
+        temp = random.choice(Blocklist)
+        blockId = int(labels_to_id[temp.label]) - 1
+        if countClass[blockId] != 0:
+            choose_blocks.append(temp)
+            countClass[blockId] -= 1
+            rdNums -= 1
+        else:
+            continue
+    return choose_blocks
+    # return random.sample(Blocklist, k=rdIdx) # py3.5 choice
 
 
 # save image with single crop
@@ -472,7 +456,8 @@ if __name__ == '__main__':
     # Average instances in each image is (3+4+5)/3 = 4
     countClass = [numOfNewImage * averageNumOfObj // len(labels) for _ in range(15)]
     for i in range(numOfNewImage):
-        choosenBlocks = chooseRandomBlocks(blocklist, countImgList)
+        choosenBlocks = chooseRandomBlocks(blocklist, labels_to_id)
+
         print('labels of Choosen Blocks = ' + str([block.label for block in choosenBlocks]) + '\n')
         for block in choosenBlocks:
             block.chooseRandomCrop()
