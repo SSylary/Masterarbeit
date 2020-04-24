@@ -61,7 +61,7 @@ class Block:
 
     def getCrop(self, filename, bbox, polygon):
         im = Image.open(os.path.join(
-            'labeled_images', filename)).convert('RGBA')
+            'pipenv_project/Mask_RCNN/AL_test/dataset_generator/labeled_images', filename)).convert('RGBA')
         imageArray = np.array(im)
         # create black background with same size as original image
         background = Image.new(
@@ -184,14 +184,14 @@ class NewImage:
     IMAGE_HEIGHT = 2054  # pixels
     IMAGE_WIDTH = 2456
     count = 20
-    csvFile = CsvFile('C:/Users/SSyla/Desktop/毕设/masterarbeit/Masterarbeit/AL_test/test_labels')  #
+    csvFile = CsvFile('pipenv_project/Mask_RCNN/AL_test/dataset_generator/test_labels')  #
 
     def __init__(self, choosenBlocks):
         # -----TODO----- background need change
         fileList = ['bg1.jpg', 'bg2.png', 'bg3.png']
         # self.background = Image.new('RGB', (IMAGE_WIDTH, IMAGE_HEIGHT), (0, 0, 0))
         bgId = fileList[random.choice([0,1,2])]
-        im = Image.open(os.path.join('background', bgId)).convert('RGBA')
+        im = Image.open(os.path.join('pipenv_project/Mask_RCNN/AL_test/dataset_generator/labeled_images/background', bgId)).convert('RGBA')
         self.background = im.resize((IMAGE_WIDTH, IMAGE_HEIGHT))
         self.crops = []
         # self.choosenBlocks = choosenBlocks
@@ -281,7 +281,7 @@ class NewImage:
                     tmpCrop['label'], [tmpCrop['im'], tmpCrop['angle']] = crop['label'],  self.randomRotate(crop)
                     rotatedPolygonCoor = self.rotatePolygon(crop['polygonCoordinates'], crop['bboxCenter'], tmpCrop['angle'])
                     # calculate the new bounding box after rotation
-                    print('old center', crop['bboxCenter'])
+                    # print('old center', crop['bboxCenter'])
                     [upper_left, lower_right] = Block.getBoundingbox(self, rotatedPolygonCoor)
                     bboxW = lower_right[0] - upper_left[0]
                     bboxH = lower_right[1] - upper_left[1]
@@ -294,7 +294,7 @@ class NewImage:
                         upperPoint, lowerPoint = existCrop['newBbox']
                         shiftX = upperPoint[0] - bboxW if upperPoint[0] - bboxW > 0 else 0
                         shiftY = upperPoint[1] - bboxH if upperPoint[1] - bboxH > 0 else 0
-                        print('shiftX & Y', shiftX, shiftY)
+                        # print('shiftX & Y', shiftX, shiftY)
                         freeRegion[shiftY:lowerPoint[1], shiftX:lowerPoint[0]] = 0
 
                     print(np.sum(freeRegion))
@@ -351,9 +351,6 @@ class NewImage:
 
         tmpCrop = {}
         tmpCrop['y_min'], tmpCrop['x_min'] = random.choice(np.transpose(np.nonzero(freeRegion)))
-        print('X = ', tmpCrop['x_min'])
-        print('Y = ', tmpCrop['y_min'])
-
         tmpCrop['x_max'], tmpCrop['y_max'] = tmpCrop['x_min'] + bbx, tmpCrop['y_min'] + bby
         tmpCrop['newCenter'] = ((tmpCrop['x_min'] + tmpCrop['x_max']) // 2, (tmpCrop['y_min'] + tmpCrop['y_max']) // 2)
         tmpCrop['x_trans'], tmpCrop['y_trans'] = tmpCrop['newCenter'][0] - crop['oldCenter'][0], tmpCrop['newCenter'][1] - crop['oldCenter'][1]
@@ -363,7 +360,7 @@ class NewImage:
 
     def saveImage(self):
         # self.background.show()
-        self.background.save(os.path.join('test', self.filename + '.png'))
+        self.background.save(os.path.join('pipenv_project/Mask_RCNN/AL_test/dataset_generator/labeled_images/test', self.filename + '.png'))
 
 
 # choose random blocks from the list
@@ -432,7 +429,7 @@ if __name__ == '__main__':
     np.set_printoptions(threshold=sys.maxsize)
     IMAGE_HEIGHT = 2054  # pixels
     IMAGE_WIDTH = 2456
-    polygon_filename = os.path.abspath('Polygones_labels.csv')
+    polygon_filename = os.path.abspath('pipenv_project/Mask_RCNN/AL_test/dataset_generator/Polygones_labels.csv')
 
     labels = ['orange_l', 'blue_l', 'red_l', 'blue_s', 'orange_m', 'red_m', 'green_s',
               'orange_s', 'yellow_l', 'green_l', 'green_m', 'blue_m', 'yellow_s', 'red_s', 'yellow_m']
@@ -468,6 +465,7 @@ if __name__ == '__main__':
 
     histo.plot('stats.png')
 
+'''
     # let number of object the same for all labels
     while not histo.haveSameNum():
         labelToNotGen = histo.getMaxLabel()[0]
@@ -491,3 +489,4 @@ if __name__ == '__main__':
         histo.countImages(cropsToPaste)
 
     histo.plot('uniform.png')
+'''
