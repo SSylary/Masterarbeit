@@ -35,7 +35,7 @@ if not os.path.exists(COCO_MODEL_PATH):
     utils.download_trained_weights(COCO_MODEL_PATH)
 
 # Directory of images to run detection on
-IMAGE_DIR = os.path.join(ROOT_DIR, "Test")
+IMAGE_DIR = os.path.join(ROOT_DIR, "dataset_generator/labeled_images")
 
 class ShapesConfig(Config):
     """Configuration for training on the toy shapes dataset.
@@ -92,19 +92,26 @@ model_path = model.find_last()
 print("Loading weights from ", model_path)
 model.load_weights(model_path, by_name=True)
 
-# COCO Class names
 # Index of the class in the list is its ID. For example, to get ID of
 class_names = ['BG', 'red_s','red_m','red_l','yellow_s','yellow_m','yellow_l','green_s','green_m','green_l','blue_s','blue_m','blue_l','orange_s','orange_m','orange_l']
-# Load a random image from the images folder
+# Load images from the images folder
 file_names = next(os.walk(IMAGE_DIR))[2]
-image = skimage.io.imread(os.path.join(IMAGE_DIR, random.choice(file_names)))
-a=datetime.now()
-# Run detection
-results = model.detect([image], verbose=1)
-b=datetime.now()
-# Visualize results
-print("Time", (b-a).seconds)
-r = results[0]
-# print(r)
-print(r['scores'])
-print(r['class_ids'])
+select_images = []
+for item in file_names:
+    image = skimage.io.imread(os.path.join(IMAGE_DIR, item))
+    # Run detection
+    results = model.detect([image], verbose=1)
+    # Visualize results
+    r = results[0]
+    ptinr(item)
+    print(result)
+    print(r['scores'])
+    '''
+    print(r['scores'])
+    # select the detections with lower scores
+    for i in r['scores']:
+        if i < 0.8:
+            select_images.append(item)
+        break
+print(select_images)
+    '''
