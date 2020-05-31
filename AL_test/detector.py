@@ -71,22 +71,16 @@ class ShapesConfig(Config):
     # use small validation steps since the epoch is small
     VALIDATION_STEPS = 50
 
-#class InferenceConfig(coco.CocoConfig):
-class InferenceConfig(ShapesConfig):
-    # Set batch size to 1 since we'll be running inference on
-    # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
-    GPU_COUNT = 1
-    IMAGES_PER_GPU = 1
 
-config = InferenceConfig()
+config = ShapesConfig()
 
 # Create model object in inference mode.
 model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
 
 # Get path to saved weights
 # Either set a specific path or find last trained weights
-# model_path = os.path.join(ROOT_DIR, ".h5 file name here")
-model_path = model.find_last()
+model_path = os.path.join(ROOT_DIR, "logs/model_v1/best_weights.h5")
+# model_path = model.find_last()
 
 # Load trained weights
 print("Loading weights from ", model_path)
@@ -106,12 +100,10 @@ for item in file_names:
     ptinr(item)
     print(result)
     print(r['scores'])
-    '''
-    print(r['scores'])
     # select the detections with lower scores
     for i in r['scores']:
         if i < 0.8:
             select_images.append(item)
         break
 print(select_images)
-    '''
+

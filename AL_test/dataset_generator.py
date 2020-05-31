@@ -1,4 +1,4 @@
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 import csv
 import numpy as np
 import re
@@ -343,6 +343,8 @@ class NewImage:
             imgCenterX , imgCenterY = crop['oldCenter'][0] + crop['x_trans'] ,crop['oldCenter'][1] + crop['y_trans']
             posX = imgCenterX - (crop['im'].size[0] //2)
             posY = imgCenterY - (crop['im'].size[1] //2)
+            factor = random.choice([0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7])
+            crop['im'] = ImageEnhance.Brightness(crop['im']).enhance(factor)
             self.background.paste(crop['im'], mask=crop['im'].split()[3], box=(posX, posY)) # crop['newBbox'][0]
         self.saveImage()
 
