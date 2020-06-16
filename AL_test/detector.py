@@ -12,6 +12,7 @@ import cv2
 import time
 import warnings
 warnings.filterwarnings('ignore')
+from PIL import Image
 from mrcnn.config import Config
 from datetime import datetime
 
@@ -35,7 +36,7 @@ if not os.path.exists(COCO_MODEL_PATH):
     utils.download_trained_weights(COCO_MODEL_PATH)
 
 # Directory of images to run detection on
-IMAGE_DIR = os.path.join(ROOT_DIR, "dataset_generator/labeled_images")
+IMAGE_DIR = os.path.join(ROOT_DIR, "training_data/package10")
 
 class ShapesConfig(Config):
     """Configuration for training on the toy shapes dataset.
@@ -71,15 +72,24 @@ class ShapesConfig(Config):
     # use small validation steps since the epoch is small
     VALIDATION_STEPS = 50
 
+    # Use small ROIs Threshold for more detecting
+    DETECTION_NMS_CONFIDENCE = 0.5
 
-config = ShapesConfig()
+#class InferenceConfig(coco.CocoConfig):
+class InferenceConfig(ShapesConfig):
+    # Set batch size to 1 since we'll be running inference on
+    # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
+    GPU_COUNT = 1
+    IMAGES_PER_GPU = 1
+
+config = InferenceConfig()
 
 # Create model object in inference mode.
 model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
 
 # Get path to saved weights
 # Either set a specific path or find last trained weights
-model_path = os.path.join(ROOT_DIR, "logs/model_v1/best_weights.h5")
+model_path = os.path.join(ROOT_DIR, "logs/30_model_v1/best_weights.h5")
 # model_path = model.find_last()
 
 # Load trained weights
@@ -90,20 +100,31 @@ model.load_weights(model_path, by_name=True)
 class_names = ['BG', 'red_s','red_m','red_l','yellow_s','yellow_m','yellow_l','green_s','green_m','green_l','blue_s','blue_m','blue_l','orange_s','orange_m','orange_l']
 # Load images from the images folder
 file_names = next(os.walk(IMAGE_DIR))[2]
+print('file_names',file_names)
 select_images = []
 for item in file_names:
-    image = skimage.io.imread(os.path.join(IMAGE_DIR, item))
+    if item == '.directory':
+        continue
+    print('image',item)
+    image = skimage.io.imread(os.path.join(IMAGE_DIR, item),as_gray=False)
     # Run detection
-    results = model.detect([image], verbose=1)
+    results = model.detect([image], verbose=0)
     # Visualize results
     r = results[0]
-    ptinr(item)
-    print(result)
+   # print(results)
     print(r['scores'])
-    # select the detections with lower scores
-    for i in r['scores']:
-        if i < 0.8:
-            select_images.append(item)
-        break
+    print(r['class_ids'])
+   # select the detections with lower scores
+    if len(r['scores']) <= 2:
+        select_images.append(item)
+    else:
+        for i in r['scores']:
+            # print(type(i))
+            if i < 0.8 and item not in select_images:
+                select_images.append(item)
 print(select_images)
 
+for image_id in select_images:
+    im = Image.open(os.path.join(IMAGE_DIR,image_id))
+    im.save(os.path.join(ROOT_DIR, 'new_max_score_select_images/{}'.format(image_id)))
+    im.close()

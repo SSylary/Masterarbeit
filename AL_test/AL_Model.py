@@ -27,18 +27,24 @@ from mrcnn import visualize
 from mrcnn.model import log
 from PIL import Image
 
-# Directory to save logs and trained model
-MODEL_DIR = os.path.join(ROOT_DIR,"logs")
-
 iter_num = 0
 
 # Local path to trained weights file
-COCO_MODEL_PATH = os.path.join(ROOT_DIR,"mask_rcnn_coco.h5")
-if not os.path.exists(COCO_MODEL_PATH):
-    utils.download_trained_weights(COCO_MODEL_PATH)
+# First time training
+# COCO_MODEL_PATH = os.path.join(ROOT_DIR,"mask_rcnn_coco.h5")
+
+# Training on already existed model
+# Directory to save logs and trained model
+MODEL_DIR = os.path.join(ROOT_DIR,"logs")
+COCO_MODEL_PATH = os.path.join(MODEL_DIR,"30_model_v1/best_weights.h5")
+
+
+#if not os.path.exists(COCO_MODEL_PATH):
+#    utils.download_trained_weights(COCO_MODEL_PATH)
 
 
 class ShapesConfig(Config):
+
     """Configuration for training on the toy shapes dataset.
     Derives from the base Config class and overrides values specific
     to the toy shapes dataset.
@@ -104,7 +110,8 @@ class BlockDataset(utils.Dataset):
         index = info['label_index']
         # file = open('mask_index.txt','r')
         # all_labels = file.readlines()
-        data = open('dataset_generator/'+info['csv_path']+'_labels.csv','r')
+        # print('====>labels/'+info['csv_path']+'_labels.csv')
+        data = open('labels/'+info['csv_path']+'_labels.csv','r')
         all_labels = csv.reader(data)
         labels = []
         for item in all_labels:
@@ -179,11 +186,18 @@ class BlockDataset(utils.Dataset):
         
         for i in range(count):
             filestr = imglist[i].split(".")[0]
+            package_id = (int(filestr)-1)//30 + 1
+            package_path = "package%s" % package_id
             # print(filestr)
-            mask_path = mask_folder +"/image%s" % filestr
+            if mask_folder == 'mask/training_data/':
+                mask_path = mask_folder+package_path +"/image%s" % filestr
+               # print('====>',mask_path)
+                csv_path_str = "training_data/"+package_path
+            else:
+                mask_path = mask_folder + "/image%s" % filestr
+                csv_path_str = img_folder
             label_index = filestr
             path2Img = img_folder+ "/%s.png" % filestr
-            csv_path_str = img_folder.split('/')[-1]
             # print(path2Img)
             cv_img = cv2.imread(path2Img)
             # print(cv_img)
@@ -246,16 +260,21 @@ class BlockDataset(utils.Dataset):
         
         return mask.astype(np.bool),class_ids.astype(np.int32)
 
-'''
+
 # initialization
-dataset_root_path = "dataset_generator/"
-img_folder = dataset_root_path + "labeled_images/train90"
-mask_folder = dataset_root_path + "mask/train90"
+'''
+dataset_root_path = "training_data/"
+img_folder = dataset_root_path + "package10"
+mask_folder = "mask/training_data/package10"
+'''
+# 
+dataset_root_path = img_folder = "new_max_score_select_images"
+mask_folder = "mask/training_data/"
+# select_img_folder = dataset_root_path + "max_score_select_images"
 imglist = os.listdir(img_folder)
 # print(imglist)
 # count = len(imglist)
-train_count = 90 
-val_count = 90
+train_count = 90
 # print(count)
 
 # traning data and validation data
@@ -265,10 +284,9 @@ dataset_train.prepare()
 print('train data preparing finished')
 # print("dataset_train-->",dataset_train._image_ids)
 # print('-----',dataset_train.get_class(dataset_train.image_ids[0]))
-'''
-val_dataset_root_path = "dataset_generator/"
-val_img_folder = val_dataset_root_path + "labeled_images/val"
-val_mask_folder = val_dataset_root_path + "mask/val"
+val_dataset_root_path = "val_data"
+val_img_folder = val_dataset_root_path
+val_mask_folder =  "mask/val_data"
 val_imglist = os.listdir(val_img_folder)
 
 val_count = 90
@@ -302,10 +320,9 @@ elif init_with == "last":
 # Passing layers="heads" freezes all layers except the head
 # layers. You can also pass a regular expression to select
 # which layers to train by name pattern.
-'''
 model.train(dataset_train, dataset_val, 
             learning_rate=config.LEARNING_RATE, 
-            epochs=40, 
+            epochs=20, 
             layers='heads')  
 
 
@@ -315,9 +332,8 @@ model.train(dataset_train, dataset_val,
 # train by name pattern.
 model.train(dataset_train, dataset_val, 
             learning_rate=config.LEARNING_RATE / 10,
-            epochs=40, 
+            epochs=20, 
             layers="all")
-'''
 
 # Create model object in inference mode.
 ## For inference
@@ -329,7 +345,7 @@ infer_config = InferenceConfig()
 model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=infer_config)
 
 # Load weights trained on MS-COCO
-cur_model = os.path.join( MODEL_DIR,'logs/90_model_v1/best_weights.h5')
+cur_model = os.path.join( MODEL_DIR,'new_120_model_v2/best_weights.h5')
 model.load_weights(cur_model, by_name=True)
 
 APs = []
@@ -347,8 +363,11 @@ for image_id in dataset_val.image_ids:
         utils.compute_ap(gt_bbox, gt_class_id, gt_mask,
                          r["rois"], r["class_ids"], r["scores"], r['masks'])
     APs.append(AP)
-    print('-------> finished ',image_id)    
+    print('-------> finished ',image_id)
 print("mAP: ", np.mean(APs))
+with open('mAP_of_model.txt','a') as f:
+    f.write('new_120_model_v2:'+str(np.mean(APs))+'---90 images from new_max_score_select_images')
+    f.write('\n')
 
 
 
