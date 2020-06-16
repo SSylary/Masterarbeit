@@ -1,0 +1,17 @@
+# New Training: brightnessFactor(0.6-1.4)
+30_model_v1:0.4881759324255916---package1
+60_model_v1:0.7393333389858404---package2
+90_model_v1:0.8731944477282189---package3
+120_model_v1:0.9118611141045888---package4
+150_model_v1:0.940188273773701---package5
+180_model_v1:0.9453425943851471---package6
+210_model_v1:0.9574321003065064---package7
+240_model_v1:0.9304537058207724---package8
+270_model_v1:0.9526419772483684---package9
+300_model_v1:0.9641203721364339---package10
+60_model_v2:0.6622500066652341---30 images from max_score_select_images
+90_model_v2:0.883166670476397---60 images from max_score_select_images
+120_model_v2:0.9077283982104727---90 images from max_score_select_images
+150_model_v2:0.9476018535511361---120 images from max_score_select_images
+new_60_model_v2:0.7268117350091537---30 images from new_max_score_select_images
+new_90_model_v2:0.8653611147458906---60 images from new_max_score_select_images
