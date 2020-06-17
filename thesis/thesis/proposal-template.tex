@@ -1,0 +1,128 @@
+% ====================================================================
+%          Template for a research proposal for student theses
+% --------------------------------------------------------------------
+%
+% Use this template to write the proposal for your thesis work.  There
+% are two  blocks in this  file which you  need to adapt below:  (1) a
+% block of  parameters which set  your name, the type  and (tentative)
+% title of  your thesis  etc.; and (2)  the actual  content describing
+% what you plan  to do for your thesis.  The  purpose of this document
+% is to  provide your  advisor, and the  reviewing professors,  with a
+% concise  statement about  your work.   But the  proposal  also helps
+% *you*  structure your  own  work  and understand  what  you want  to
+% achieve.
+%
+% See also the wiki page at
+% http://idswiki.fzi.de/wiki/index.php/Proposal
+%
+% ====================================================================
+\documentclass{article}
+
+% Packages
+\usepackage[a4paper,hmargin=2cm,vmargin=1.5cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{titling}
+\usepackage{newtxtext,newtxmath}
+\usepackage{etoolbox}
+
+% Setup
+\pagestyle{empty}
+\setlength{\droptitle}{-1cm}
+\pretitle{\begin{center}\huge\sffamily\bfseries PROPOSAL\par}
+\posttitle{\end{center}}
+\preauthor{\begin{center}
+    \large\vskip0.5em%
+    \begin{tabular}[t]{rl}}
+\postauthor{\end{tabular}\par\end{center}}
+\predate{\hfill}
+\postdate{\par}
+
+% Different types of work (add a new one if necessary)
+\newcommand{\bachelorthesis}{\iflanguage{english}{Bachelor Thesis}{Bachelorarbeit}}
+\newcommand{\masterthesis}{\iflanguage{english}{Master Thesis}{Masterarbeit}}
+\newcommand{\studienarbeit}{\iflanguage{english}{Study Thesis (Studienarbeit)}{Studienarbeit}}
+\newcommand{\diplomarbeit}{\iflanguage{english}{Diploma Thesis (Diplomarbeit)}{Diplomarbeit}}
+
+
+% ====================================================================
+% (1) Adjust the following parameters:
+% --------------------------------------------------------------------
+
+% Toggle the following lines to switch between English and German.
+\usepackage[english]{babel}
+%\usepackage[british,english]{babel}
+%\usepackage[ngerman]{babel}
+
+\newcommand{\titleEnglish}{English Title of the Thesis}
+% Only used if the language is set to German
+\newcommand{\titleGerman}{Deutscher Titel der Arbeit}
+
+% Type of work (pick one from the commands defined above:
+% \bachelorthesis, \masterthesis, \studienarbeit, \diplomarbeit)
+\newcommand{\thesistype}{\bachelorthesis}
+
+\newcommand{\myname}{My Name}
+\newcommand{\advisor}{Dipl.-Inform.~Max Mustermann}
+\newcommand{\reviewerone}{Prof.~Dr.-Ing.~R.~Dillmann}
+% Leave empty if a second reviewer is not required
+\newcommand{\reviewertwo}{}
+
+% Expected (approximate) start and end of your work
+\newcommand{\startmonth}{April 2014}
+\newcommand{\releasemonth}{June 2014}
+% ====================================================================
+
+
+% Title setup
+\newcommand{\maintitle}{%
+  \large\bfseries--~\thesistype~--\par%
+  \LARGE\vskip0.5em\iflanguage{english}{\titleEnglish}{\titleGerman\par\Large\itshape\titleEnglish}}
+\newcommand{\advisorlabel}{\iflanguage{english}{Advisor}{Betreuer}}
+\newcommand{\reviewerlabel}{\iflanguage{english}{\ifdefempty{\reviewertwo}{Reviewer}{Reviewers}}{Gutachter}}
+\newcommand{\abstractlabel}{\iflanguage{english}{Abstract}{Kurzfassung}}
+\newcommand{\introlabel}{\iflanguage{english}{Introduction}{Einleitung}}
+\newcommand{\conceptlabel}{\iflanguage{english}{Concept}{Konzept}}
+\newcommand{\startmonthlabel}{\iflanguage{english}{Start of work}{Beginn der Arbeit}}
+\newcommand{\releasemonthlabel}{\iflanguage{english}{Expected completion}{Erwartete Fertigstellung}}
+
+\title{\maintitle}
+\author{%
+  Name: & \myname \\
+  \advisorlabel: & \advisor \\
+  \reviewerlabel: & \reviewerone\ifdefempty{\reviewertwo}{}{, \reviewertwo} \\
+  \startmonthlabel: & \startmonth \\
+  \releasemonthlabel: & \releasemonth \\
+}
+\date{\today}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+
+% ====================================================================
+% (2) Your proposal content comes here:
+% --------------------------------------------------------------------
+\section*{\abstractlabel}
+One (!!!) sentence describing what the thesis aims to accomplish
+(important!).
+
+\section*{\introlabel}
+Brief introduction (3--4 sentences) into the subject area.
+
+Short description (3--4 sentences) of the problem to be solved by this
+thesis.
+
+\section*{\conceptlabel}
+Short sketch of your concept for solving the problem stated above.
+
+Short outline of how you plan to implement your concept.  Include a
+rough time plan.
+
+\emph{The whole document should fit on a single page!}
+% ====================================================================
+
+
+\end{document}

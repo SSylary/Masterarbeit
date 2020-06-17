@@ -1,0 +1,12 @@
+*.aux
+*.log
+*.bbl
+*.blg
+*.toc
+*~
+booka4.idx
+booka4.ilg
+booka4.ind
+booka4.lof
+booka4.lot
+booka4.pdf
