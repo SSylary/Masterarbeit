@@ -9,6 +9,7 @@ import skimage.io
 import matplotlib
 import matplotlib.pyplot as plt
 import cv2
+import csv
 import time
 import warnings
 warnings.filterwarnings('ignore')
@@ -37,6 +38,8 @@ if not os.path.exists(COCO_MODEL_PATH):
 
 # Directory of images to run detection on
 IMAGE_DIR = os.path.join(ROOT_DIR, "training_data/package10")
+# path to labels
+PATH_TO_LABELS = os.path.join(ROOT_DIR,"labels/training_data/package10_labels.csv")
 
 class ShapesConfig(Config):
     """Configuration for training on the toy shapes dataset.
@@ -98,9 +101,17 @@ model.load_weights(model_path, by_name=True)
 
 # Index of the class in the list is its ID. For example, to get ID of
 class_names = ['BG', 'red_s','red_m','red_l','yellow_s','yellow_m','yellow_l','green_s','green_m','green_l','blue_s','blue_m','blue_l','orange_s','orange_m','orange_l']
+
+# Dict of class:
+class_to_id = {'red_s':1,'red_m':2,'red_l':3,'yellow_s':4,'yellow_m':5,'yellow_l':6,'green_s':7,'green_m':8,'green_l':9,'blue_s':10,'blue_m':11,'blue_l':12,'orange_s':13,'orange_m':14,'orange_l':15}
+
+# Load labels in order to get previous informations
+data = open(PATH_TO_LABELS,'r')
+all_labels = csv.reader(data) 
+
 # Load images from the images folder
 file_names = next(os.walk(IMAGE_DIR))[2]
-print('file_names',file_names)
+# print('file_names',file_names)
 select_images = []
 for item in file_names:
     if item == '.directory':
@@ -112,19 +123,51 @@ for item in file_names:
     # Visualize results
     r = results[0]
    # print(results)
-    print(r['scores'])
-    print(r['class_ids'])
-   # select the detections with lower scores
-    if len(r['scores']) <= 2:
-        select_images.append(item)
+   # print(r['scores'])
+   # print(r['class_ids'])
+   # select the images that missing detection
+    for image_info in all_labels:
+        if all_labels.line_num == 1:
+            continue
+        labels = []
+        if image_info[0] == item:
+            labels.apend(class_to_id[image_info[1]])
+    n = len(labels)
+    if abs(len(r['scores'])-n) > 2:
+        with open('Most_difficult.txt','a') as f:
+            f.write(IMAGE_DIR+'/image%s' % item)
+            f.write('\n')
+        # select_images.append(item)
+    elif abs(len(r['scores'])-n) >=1:
+        with open('Medium_difficult.txt','a') as f:
+            f.write(IMAGE_DIR+'/image%s' % item)
+            f.write('\n')
     else:
+    # if the amount of instances match, then check the precision of each instance
+        low_detect_counter = 0   
         for i in r['scores']:
             # print(type(i))
-            if i < 0.8 and item not in select_images:
-                select_images.append(item)
-print(select_images)
+            if i < 0.8:
+                low_detect_counter +=1
+        if low_detect_counter >=3:
+            with open('Most_difficult.txt','a') as f:
+                f.write(IMAGE_DIR+'/image%s' % item)
+                f.write('\n')
+        elif low_detect_counter == 2:
+            with open('Medium_difficult.txt','a') as f:
+                f.write(IMAGE_DIR+'/image%s' % item)
+                f.write('\n')
+        elif low_detect_counter == 1:
+            with open('Normal_difficult.txt','a') as f:
+                f.write(IMAGE_DIR+'/image%s' % item)
+                f.write('\n')
+        else:
+            continue
+#print(select_images)
 
+'''
 for image_id in select_images:
     im = Image.open(os.path.join(IMAGE_DIR,image_id))
     im.save(os.path.join(ROOT_DIR, 'new_max_score_select_images/{}'.format(image_id)))
     im.close()
+'''    
