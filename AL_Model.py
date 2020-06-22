@@ -193,11 +193,13 @@ class BlockDataset(utils.Dataset):
                 mask_path = mask_folder+package_path +"/image%s" % filestr
                # print('====>',mask_path)
                 csv_path_str = "training_data/"+package_path
+                path2Img = img_folder+'/'+package_path+ "/%s.png" % filestr
             else:
                 mask_path = mask_folder + "/image%s" % filestr
                 csv_path_str = img_folder
+                path2Img = img_folder+ "/%s.png" % filestr
             label_index = filestr
-            path2Img = img_folder+ "/%s.png" % filestr
+            # path2Img = img_folder+ "/%s.png" % filestr
             # print(path2Img)
             cv_img = cv2.imread(path2Img)
             # print(cv_img)
@@ -267,14 +269,19 @@ dataset_root_path = "training_data/"
 img_folder = dataset_root_path + "package10"
 mask_folder = "mask/training_data/package10"
 '''
-# 
-dataset_root_path = img_folder = "new_max_score_select_images"
+#
+imglist = []
+with open("Most_difficult.txt") as f:
+    for line in f:
+        # print(line.split('/')[-1])
+        imglist.append(line.split('/')[-1][5:])
+dataset_root_path = img_folder = "training_data/"
 mask_folder = "mask/training_data/"
 # select_img_folder = dataset_root_path + "max_score_select_images"
-imglist = os.listdir(img_folder)
+# imglist = os.listdir(img_folder)
 # print(imglist)
 # count = len(imglist)
-train_count = 90
+train_count = 30
 # print(count)
 
 # traning data and validation data
@@ -345,7 +352,7 @@ infer_config = InferenceConfig()
 model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=infer_config)
 
 # Load weights trained on MS-COCO
-cur_model = os.path.join( MODEL_DIR,'new_120_model_v2/best_weights.h5')
+cur_model = os.path.join( MODEL_DIR,'new_60_model_v3/best_weights.h5')
 model.load_weights(cur_model, by_name=True)
 
 APs = []
@@ -366,7 +373,7 @@ for image_id in dataset_val.image_ids:
     print('-------> finished ',image_id)
 print("mAP: ", np.mean(APs))
 with open('mAP_of_model.txt','a') as f:
-    f.write('new_120_model_v2:'+str(np.mean(APs))+'---90 images from new_max_score_select_images')
+    f.write('new_60_model_v3:'+str(np.mean(APs))+'---30 images from Most_difficult_images')
     f.write('\n')
 
 
