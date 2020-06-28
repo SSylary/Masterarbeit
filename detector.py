@@ -16,6 +16,7 @@ warnings.filterwarnings('ignore')
 from PIL import Image
 from mrcnn.config import Config
 from datetime import datetime
+from collections import Counter
 
 print(tf.__version__)
 # Root directory of the project
@@ -107,7 +108,13 @@ class_to_id = {'red_s':1,'red_m':2,'red_l':3,'yellow_s':4,'yellow_m':5,'yellow_l
 
 # Load labels in order to get previous informations
 data = open(PATH_TO_LABELS,'r')
-all_labels = csv.reader(data) 
+all_labels = csv.reader(data)
+id_list = []
+for instance in all_labels:
+    if all_labels.line_num == 1:
+        continue
+    id_list.append(instance[0])
+instance_list = Counter(id_list)
 
 # Load images from the images folder
 file_names = next(os.walk(IMAGE_DIR))[2]
@@ -116,23 +123,19 @@ select_images = []
 for item in file_names:
     if item == '.directory':
         continue
-    print('image',item)
+    print(item.split('.')[0])
     image = skimage.io.imread(os.path.join(IMAGE_DIR, item),as_gray=False)
     # Run detection
     results = model.detect([image], verbose=0)
     # Visualize results
     r = results[0]
    # print(results)
-   # print(r['scores'])
-   # print(r['class_ids'])
+    print(r['scores'])
+    print(r['class_ids'])
    # select the images that missing detection
-    for image_info in all_labels:
-        if all_labels.line_num == 1:
-            continue
-        labels = []
-        if image_info[0] == item:
-            labels.apend(class_to_id[image_info[1]])
-    n = len(labels)
+    image_id = item.split('.')[0]
+    n = instance_list[image_id]
+    print('gt amount of instance:',n)
     if abs(len(r['scores'])-n) > 2:
         with open('Most_difficult.txt','a') as f:
             f.write(IMAGE_DIR+'/image%s' % item)
@@ -164,7 +167,6 @@ for item in file_names:
         else:
             continue
 #print(select_images)
-
 '''
 for image_id in select_images:
     im = Image.open(os.path.join(IMAGE_DIR,image_id))
