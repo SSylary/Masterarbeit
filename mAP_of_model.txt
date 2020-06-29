@@ -15,3 +15,29 @@
 150_model_v2:0.9476018535511361---120 images from max_score_select_images
 new_60_model_v2:0.7268117350091537---30 images from new_max_score_select_images
 new_90_model_v2:0.8653611147458906---60 images from new_max_score_select_images
+new_120_model_v2:0.937675928214082---90 images from new_max_score_select_images
+new_150_model_v2:0.9310370393594106---120 images from new_max_score_select_images
+new_180_model_v2:0.9669259267383151---150 images from new_max_score_select_images
+new_60_model_v3:0.71573148769361---30 images from Most_difficult_images
+new_90_model_v3:0.8718364233220064---60 images from Most_difficult_images
+new_120_model_v3:0.9138425948801968---90 images from Most_difficult_images
+
+First_model:0.4265925988168628---package1
+
+60_model_v2:0.6781388958350375---30 images from Medium difficulty
+
+Second_model:0.5133611173320699---15 images from Most difficulty
+
+Second_model:0.544385808761473---15 images from Mdedium difficulty
+
+Second_model:0.7950833381436488---15 images from Most difficulty and 15 images from Mdedium difficulty
+
+Third_model:0.8105524743127603---30 images from Mdedium difficulty
+
+Third_model:0.8540123493665899---30 images from Mdedium difficulty
+
+Max_score_model:0.7029475373471226---30 images from most difficulty
+
+Max_score_model:0.8825000046414359---60 images from most difficulty
+
+Max_score_model:0.8794660529742638---90 images from most difficulty
