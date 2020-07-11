@@ -9,17 +9,15 @@ import random
 import numpy as np
 import cv2
 import json
+import skimage.io
 import matplotlib
 import matplotlib.pyplot as plt
-import warnings
 import tensorflow as tf
-
+from collections import Counter
+import warnings
 warnings.filterwarnings('ignore')
 
 # print(tf.__version__)
-
-# Root directory of the project
-ROOT_DIR = os.getcwd()
 
 from mrcnn.config import Config
 from mrcnn import model as modellib,utils
@@ -27,20 +25,13 @@ from mrcnn import visualize
 from mrcnn.model import log
 from PIL import Image
 
-iter_num = 0
-
+# Root directory of the project
+ROOT_DIR = os.getcwd()
 # Local path to trained weights file
-# First time training
-# COCO_MODEL_PATH = os.path.join(ROOT_DIR,"mask_rcnn_coco.h5")
-
-# Training on already existed model
-# Directory to save logs and trained model
-MODEL_DIR = os.path.join(ROOT_DIR,"logs")
-COCO_MODEL_PATH = os.path.join(MODEL_DIR,"30_model_v1/best_weights.h5")
-
-
-#if not os.path.exists(COCO_MODEL_PATH):
-#    utils.download_trained_weights(COCO_MODEL_PATH)
+MODEL_DIR = os.path.join(ROOT_DIR, "logs")
+DATA_DIR = os.path.join(ROOT_DIR, "training_data")
+# Load initial weights from coco. Only for first time training
+COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
 
 
 class ShapesConfig(Config):
@@ -55,7 +46,7 @@ class ShapesConfig(Config):
     # Train on 1 GPU and 8 images per GPU. We can put multiple images on each
     # GPU because the images are small. Batch size is 8 (GPUs * images/GPU).
     GPU_COUNT = 1
-    IMAGES_PER_GPU = 2
+    IMAGES_PER_GPU = 1
 
     # Number of classes (including background)
     NUM_CLASSES = 1 + 15 # background +  shapes
@@ -77,21 +68,6 @@ class ShapesConfig(Config):
 
     # use small validation steps since the epoch is small
     VALIDATION_STEPS = 25
-    
-config = ShapesConfig()
-# config.display()
-
-
-def get_ax(rows=1, cols=1, size=8):
-    """Return a Matplotlib Axes array to be used in
-    all visualizations in the notebook. Provide a
-    central point to control graph sizes.
-    
-    Change the default size attribute to control the size
-    of rendered images
-    """
-    _, ax = plt.subplots(rows, cols, figsize=(size*cols, size*rows))
-    return ax
 
 
 
@@ -137,7 +113,8 @@ class BlockDataset(utils.Dataset):
                         mask [j,i,index] = 1
             
         return mask
-    
+
+    # generate the N mask of each image
     def drawMask(self,image_id):
         info = self.image_info[image_id]
         masklist = os.listdir(info['mask_path'])
@@ -158,15 +135,11 @@ class BlockDataset(utils.Dataset):
        
         
     def load_shapes(self,count,img_folder,mask_folder,imglist,dataset_root_path):
-        # Add classes
-        '''
-        self.add_class("shapes",1,"large")
-        self.add_class("shapes",2,"medium")
-        self.add_class("shapes",3,"small")
-        '''
-        # "red_s","red_m","red_l","yellow_s","yellow_m","yellow_l","green_s",
-        # "green_m","green_l","blue_s","blue_m","blue_l","orange_s","orange_m","orange_l"
-        
+        """
+        Add all 15 classes
+        "red_s","red_m","red_l","yellow_s","yellow_m","yellow_l","green_s",
+        "green_m","green_l","blue_s","blue_m","blue_l","orange_s","orange_m","orange_l"
+        """
         self.add_class("shapes",1,"red_s")
         self.add_class("shapes",2,"red_m")
         self.add_class("shapes",3,"red_l")
@@ -183,7 +156,6 @@ class BlockDataset(utils.Dataset):
         self.add_class("shapes",14,"orange_m")
         self.add_class("shapes",15,"orange_l")
 
-        
         for i in range(count):
             filestr = imglist[i].split(".")[0]
             package_id = (int(filestr)-1)//30 + 1
@@ -193,19 +165,18 @@ class BlockDataset(utils.Dataset):
                 mask_path = mask_folder+package_path +"/image%s" % filestr
                # print('====>',mask_path)
                 csv_path_str = "training_data/"+package_path
-                path2Img = img_folder+'/'+package_path+ "/%s.png" % filestr
+                path_to_img = img_folder+'/'+package_path+ "/%s.png" % filestr
             else:
                 mask_path = mask_folder + "/image%s" % filestr
                 csv_path_str = img_folder
-                path2Img = img_folder+ "/%s.png" % filestr
+                path_to_img = img_folder+ "/%s.png" % filestr
             label_index = filestr
-            # path2Img = img_folder+ "/%s.png" % filestr
-            # print(path2Img)
-            cv_img = cv2.imread(path2Img)
+            # path_to_img = img_folder+ "/%s.png" % filestr
+            # print(path_to_img)
+            cv_img = cv2.imread(path_to_img)
             # print(cv_img)
             # resize_img = cv2.resize(cv_img,(384,384),interpolation = cv2.INTER_AREA)
-            self.add_image("shapes",image_id = i, path = path2Img,csv_path = csv_path_str,
-                            width = cv_img.shape[1],height = cv_img.shape[0],mask_path = mask_path, label_index = label_index)
+            self.add_image("shapes",image_id=i, path=path_to_img, csv_path=csv_path_str, width=cv_img.shape[1], height=cv_img.shape[0], mask_path=mask_path, label_index=label_index)
     
             
     
@@ -260,121 +231,231 @@ class BlockDataset(utils.Dataset):
         '''
         # print('-----END')
         
-        return mask.astype(np.bool),class_ids.astype(np.int32)
+        return mask.astype(np.bool), class_ids.astype(np.int32)
 
 
-# initialization
-'''
-dataset_root_path = "training_data/"
-img_folder = dataset_root_path + "package10"
-mask_folder = "mask/training_data/package10"
-'''
-#
-imglist = []
-with open("Most_difficult.txt") as f:
-    for line in f:
-        # print(line.split('/')[-1])
-        imglist.append(line.split('/')[-1][5:])
-dataset_root_path = img_folder = "training_data/"
-mask_folder = "mask/training_data/"
-# select_img_folder = dataset_root_path + "max_score_select_images"
-# imglist = os.listdir(img_folder)
-# print(imglist)
-# count = len(imglist)
-train_count = 30
-# print(count)
+class TrainingProcess:
 
-# traning data and validation data
-dataset_train = BlockDataset()
-dataset_train.load_shapes(train_count,img_folder,mask_folder,imglist,dataset_root_path)
-dataset_train.prepare()
-print('train data preparing finished')
-# print("dataset_train-->",dataset_train._image_ids)
-# print('-----',dataset_train.get_class(dataset_train.image_ids[0]))
-val_dataset_root_path = "val_data"
-val_img_folder = val_dataset_root_path
-val_mask_folder =  "mask/val_data"
-val_imglist = os.listdir(val_img_folder)
-
-val_count = 90
-dataset_val = BlockDataset()
-dataset_val.load_shapes(val_count,val_img_folder,val_mask_folder,val_imglist,val_dataset_root_path)
-dataset_val.prepare()
-print('val data preparing finished')
-# print("dataset_val-->",dataset_val._image_ids)
+    def set_training_data(self, src_data=None):
+        """
+        From AL strategy selected images' list to
+        """
+        # initial training, using package1 as training data
+        if src_data == None:
+            imglist = os.listdir("training_data/package1")
+        else:
+        # training with selected data
+        # src_data: list
+            imglist = []
+            with open(src_data) as f:
+                for line in f:
+                    imglist.append(line.split('/')[-1][5:])
+        return imglist
 
 
-# create model in training model
-model = modellib.MaskRCNN(mode="training",config = config ,model_dir = MODEL_DIR)
+    def train_model(self, train_data, model_infos, dataset_val, cur_model_path = COCO_MODEL_PATH):
+        """
+        traing model
+        train_data: train_imglist
+        model_info: [log_dir, weights_name]
+        """
 
-# Which weights to start with?
-init_with = "coco"  # imagenet, coco, or last
-if init_with == "imagenet":
-    model.load_weights(model.get_imagenet_weights(), by_name=True)
-elif init_with == "coco":
-    # Load weights trained on MS COCO, but skip layers that
-    # are different due to the different number of classes
-    # See README for instructions to download the COCO weights
-    model.load_weights(COCO_MODEL_PATH, by_name=True,
-                       exclude=["mrcnn_class_logits", "mrcnn_bbox_fc", 
-                                "mrcnn_bbox", "mrcnn_mask"])
-elif init_with == "last":
-    # Load the last model you trained and continue training
-    model.load_weights(model.find_last()[1], by_name=True)
+        train_dataset_root_path = img_folder = "training_data"
+        train_mask_folder = "mask/training_data/"
+        train_imglist = train_data
+        train_count = len(train_imglist)
+        dataset_train = BlockDataset()
+        dataset_train.load_shapes(train_count, img_folder, train_mask_folder, train_imglist, train_dataset_root_path)
+        dataset_train.prepare()
+        print('train data preparing finished')
+
+        # create model in training model
+        config = ShapesConfig()
+        model = modellib.MaskRCNN(mode="training", config=config, model_dir=MODEL_DIR, model_info=model_infos)
+
+        # Which weights to start with?
+        init_with = "coco"  # imagenet, coco, or last
+        if init_with == "imagenet":
+            model.load_weights(model.get_imagenet_weights(), by_name=True)
+        elif init_with == "coco":
+            # Load weights trained on MS COCO, but skip layers that
+            # are different due to the different number of classes
+            # See README for instructions to download the COCO weights
+            model.load_weights(cur_model_path, by_name=True,
+                               exclude=["mrcnn_class_logits", "mrcnn_bbox_fc",
+                                        "mrcnn_bbox", "mrcnn_mask"])
+        elif init_with == "last":
+            # Load the last model you trained and continue training
+            model.load_weights(model.find_last()[1], by_name=True)
+
+        # Train the head branches
+        # Passing layers="heads" freezes all layers except the head
+        # layers. You can also pass a regular expression to select
+        # which layers to train by name pattern.
+        model.train(dataset_train, dataset_val,
+                    learning_rate=config.LEARNING_RATE,
+                    epochs=20,
+                    layers='heads')
+
+        # Fine tune all layers
+        # Passing layers="all" trains all layers. You can also
+        # pass a regular expression to select which layers to
+        # train by name pattern.
+        model.train(dataset_train, dataset_val,
+                    learning_rate=config.LEARNING_RATE / 10,
+                    epochs=20,
+                    layers="all")
 
 
-# Train the head branches
-# Passing layers="heads" freezes all layers except the head
-# layers. You can also pass a regular expression to select
-# which layers to train by name pattern.
-model.train(dataset_train, dataset_val, 
-            learning_rate=config.LEARNING_RATE, 
-            epochs=20, 
-            layers='heads')  
+    def mAP_of_model(self, model_info, val_data):
+        infer_config = ShapesConfig()
+        model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=infer_config, model_info=model_info)
+
+        # Load weights trained on current model
+        cur_model_path = os.path.join(model_info[0], model_info[1])
+        cur_model = os.path.join(MODEL_DIR, cur_model_path)
+        model.load_weights(cur_model, by_name=True)
+
+        APs = []
+        for image_id in val_data.image_ids:
+            # Load image and ground truth data
+            image, image_meta, gt_class_id, gt_bbox, gt_mask = \
+                modellib.load_image_gt(dataset_val, config,
+                                       image_id, use_mini_mask=False)
+            molded_images = np.expand_dims(modellib.mold_image(image, config), 0)
+            # Run object detection
+            results = model.detect([image], verbose=0)
+            r = results[0]
+            # Compute AP
+            AP, precisions, recalls, overlaps = \
+                utils.compute_ap(gt_bbox, gt_class_id, gt_mask,
+                                 r["rois"], r["class_ids"], r["scores"], r['masks'])
+            APs.append(AP)
+        mAP = np.mean(APs)
+        with open('mAP_of_Model.txt', 'a') as f:
+            f.write(cur_model_path, str(np.mean(APs)))
+            f.write('\n')
 
 
-# Fine tune all layers
-# Passing layers="all" trains all layers. You can also 
-# pass a regular expression to select which layers to
-# train by name pattern.
-model.train(dataset_train, dataset_val, 
-            learning_rate=config.LEARNING_RATE / 10,
-            epochs=20, 
-            layers="all")
+class ActiveLearningStrategy:
+    """
+    Using different strategies to select most 'hard' images for optimizing the first version model.
+    """
 
-# Create model object in inference mode.
-## For inference
-class InferenceConfig(ShapesConfig):
-    GPU_COUNT = 1
-    IMAGES_PER_GPU = 1
+    def __init__(self, dataset_val, images_pool):
+        self.dataset_val = dataset_val
+        self.images_pool = images_pool
 
-infer_config = InferenceConfig()
-model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=infer_config)
 
-# Load weights trained on MS-COCO
-cur_model = os.path.join( MODEL_DIR,'new_60_model_v3/best_weights.h5')
-model.load_weights(cur_model, by_name=True)
+    def max_scroe_strategy(self):
+        """
+        Choosing the images which has lower prediction score(<0.8)
+        """
+        # for result in resultOfDetection:
 
-APs = []
-for image_id in dataset_val.image_ids:
-    # Load image and ground truth data
-    image, image_meta, gt_class_id, gt_bbox, gt_mask =\
-        modellib.load_image_gt(dataset_val, config,
-                               image_id, use_mini_mask=False)
-    molded_images = np.expand_dims(modellib.mold_image(image, config), 0)
-    # Run object detection
-    results = model.detect([image], verbose=0)
-    r = results[0]
-    # Compute AP
-    AP, precisions, recalls, overlaps =\
-        utils.compute_ap(gt_bbox, gt_class_id, gt_mask,
-                         r["rois"], r["class_ids"], r["scores"], r['masks'])
-    APs.append(AP)
-    print('-------> finished ',image_id)
-print("mAP: ", np.mean(APs))
-with open('mAP_of_model.txt','a') as f:
-    f.write('new_60_model_v3:'+str(np.mean(APs))+'---30 images from Most_difficult_images')
-    f.write('\n')
+        pass
+
+    def min_detection_strategy(self, init_model_infos):
+        """
+        Choosing the images which has missed detection for instance
+        """
+        model_folder = 'min_detection_model'
+        result = self.detection(init_model_infos)
+        # here add some methods to make select more 'clever'
+        rank_hard_images = sorted(result.keys())
+        total_amount = 30
+        # Select most hard images (30 as a step)
+        # Start training with select images
+        while len(rank_hard_images) >= 30:
+            al_model = TrainingProcess()
+            al_model_data = rank_hard_images[:30]
+            total_amount += 30
+            al_model_info = [model_folder, '%images_model' % total_amount]
+            al_model.train_model(al_model_data, al_model_info, self.dataset_val)
+            al_model.mAP_of_model(al_model_info, self.dataset_val)
+            result = self.detection(al_model_info, al_model_data)
+            rank_hard_images = sorted(result.keys())
+        print("Ending selection")
+
+
+    def remove_trained_images(self, img_pool, img_list):
+        for img in img_list:
+            img_pool.remove(img)
+        return img_pool
+
+
+    def max_entropy_strategy(self):
+        pass
+
+    def max_gradient_decent(self):
+        pass
+
+
+    def detection(self, model_infos, trained_images=None):
+        """
+        Try to detect all the rest 270 images by the first version model
+        model_info: [model_folder, model_weights_name] first version model which was trained with package1
+        imagesPool: [path_to_packges, packges_list] package2 - package10
+        """
+        # Index of the class in the list is its ID. For example, to get ID of
+        class_names = ['BG', 'red_s', 'red_m', 'red_l', 'yellow_s', 'yellow_m', 'yellow_l', 'green_s', 'green_m',
+                       'green_l', 'blue_s', 'blue_m', 'blue_l', 'orange_s', 'orange_m', 'orange_l']
+        config = ShapesConfig()
+        detect_model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config, model_info=model_infos)
+        # Load weights trained on current model
+        cur_model_path = os.path.join(model_infos[0], model_infos[1]+'.h5')
+        cur_model = os.path.join(MODEL_DIR, cur_model_path)
+        detect_model.load_weights(cur_model, by_name=True)
+        # Traverse all the packages(the pool)
+        result_of_detection = {}
+        for package in self.images_pool:
+            image_dir = os.path.join(DATA_DIR, package)
+            images_in_package = os.listdir(image_dir)
+            for img in images_in_package:
+                if trained_images:
+                    if img in trained_images:
+                        continue
+                image = skimage.io.imread(os.path.join(image_dir, img), as_gray=False)
+                # Run detection
+                results = detect_model.detect([image], verbose=0)
+                # Visualize results
+                r = results[0]
+                # Visualizing the detection result and save it
+                # visualize.display_instances(item, image, r['rois'], r['masks'], r['class_ids'], class_names, r['scores'])
+                # use dict to save the info of the detected instances of each images
+                result_of_detection[img] = len(r['scores'])
+        print("+++++++detection finished")
+        return result_of_detection
+
+
+if __name__ == "__main__":
+
+    # Validation dataset only need to be loaded once
+    val_dataset_root_path = val_img_folder = "val_data"
+    val_mask_folder = "mask/val_data"
+    val_imglist = os.listdir(val_img_folder)
+    val_count = len(val_imglist)
+    dataset_val = BlockDataset()
+    dataset_val.load_shapes(val_count, val_img_folder, val_mask_folder, val_imglist, val_dataset_root_path)
+    dataset_val.prepare()
+    print('=====>validation data finished')
+
+    init_model_info = ['30_model_v1', 'best_weights']
+    package_list = ['package2', 'package3', 'package4', 'package5', 'package6', 'package7', 'package8', 'package9', 'package10']
+
+    if not init_model_info:
+        # Training the first version model
+        init_model = TrainingProcess()
+        training_images_list = init_model.set_training_data()
+        # Set the weights' name and save dir
+        # firstModelInfo: [model_folder, model_weights_name] -> str
+        init_model_info = ['FirstVersionModel', 'bestModelWeights']
+        init_model.train_model(training_images_list, init_model_info, dataset_val)
+        init_model.mAP_of_model(first_model_info, dataset_val)
+
+    al_model_result = ActiveLearningStrategy(dataset_val=dataset_val, images_pool=package_list)
+    al_model_result.min_detection_strategy(init_model_info)
+
 
 
 
