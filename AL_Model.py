@@ -24,7 +24,7 @@ from mrcnn import model as modellib,utils
 from mrcnn import visualize
 from mrcnn.model import log
 from PIL import Image
-
+from collections import Counter
 # Root directory of the project
 ROOT_DIR = os.getcwd()
 # Local path to trained weights file
@@ -312,17 +312,17 @@ class TrainingProcess:
         model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=infer_config, model_info=model_info)
 
         # Load weights trained on current model
-        cur_model_path = os.path.join(model_info[0], model_info[1])
-        cur_model = os.path.join(MODEL_DIR, cur_model_path)
-        model.load_weights(cur_model, by_name=True)
+        cur_model_path = os.path.join(model_info[0], model_info[1]+'.h5')
+        cur_model_weights = os.path.join(MODEL_DIR, cur_model_path)
+        model.load_weights(cur_model_weights, by_name=True)
 
         APs = []
         for image_id in val_data.image_ids:
             # Load image and ground truth data
             image, image_meta, gt_class_id, gt_bbox, gt_mask = \
-                modellib.load_image_gt(dataset_val, config,
+                modellib.load_image_gt(dataset_val, infer_config,
                                        image_id, use_mini_mask=False)
-            molded_images = np.expand_dims(modellib.mold_image(image, config), 0)
+            molded_images = np.expand_dims(modellib.mold_image(image, infer_config), 0)
             # Run object detection
             results = model.detect([image], verbose=0)
             r = results[0]
@@ -333,7 +333,7 @@ class TrainingProcess:
             APs.append(AP)
         mAP = np.mean(APs)
         with open('mAP_of_Model.txt', 'a') as f:
-            f.write(cur_model_path, str(np.mean(APs)))
+            f.write(cur_model_path + ':' + str(mAP))
             f.write('\n')
 
 
@@ -359,29 +359,32 @@ class ActiveLearningStrategy:
         """
         Choosing the images which has missed detection for instance
         """
-        model_folder = 'min_detection_model'
+        model_folder = 'min_detection_model_v2'
         result = self.detection(init_model_infos)
         # here add some methods to make select more 'clever'
-        rank_hard_images = sorted(result.keys())
+        rank_hard_images = sorted(result.items(), key=lambda item:item[1], reverse=True)
         total_amount = 30
         # Select most hard images (30 as a step)
         # Start training with select images
-        while len(rank_hard_images) >= 30:
+        while rank_hard_images[0] != 0:
             al_model = TrainingProcess()
-            al_model_data = rank_hard_images[:30]
+            al_model_data = []
+            for item in rank_hard_images[:30]:
+                al_model_data.append(item[0])
+            print('select images are:', al_model_data)
             total_amount += 30
-            al_model_info = [model_folder, '%images_model' % total_amount]
-            al_model.train_model(al_model_data, al_model_info, self.dataset_val)
+            if total_amount == 60:
+                last_model_info = init_model_infos
+            else:
+                last_model_info = al_model_info
+            last_model_path = os.path.join(last_model_info[0], last_model_info[1] + '.h5')
+            last_model_weights = os.path.join(MODEL_DIR, last_model_path)
+            al_model_info = [model_folder, '%s_images_model' % total_amount]
+            al_model.train_model(al_model_data, al_model_info, self.dataset_val, cur_model_path=last_model_weights)
             al_model.mAP_of_model(al_model_info, self.dataset_val)
             result = self.detection(al_model_info, al_model_data)
-            rank_hard_images = sorted(result.keys())
+            rank_hard_images = sorted(result.items(), key=lambda item:item[1], reverse=True)
         print("Ending selection")
-
-
-    def remove_trained_images(self, img_pool, img_list):
-        for img in img_list:
-            img_pool.remove(img)
-        return img_pool
 
 
     def max_entropy_strategy(self):
@@ -404,14 +407,17 @@ class ActiveLearningStrategy:
         detect_model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config, model_info=model_infos)
         # Load weights trained on current model
         cur_model_path = os.path.join(model_infos[0], model_infos[1]+'.h5')
-        cur_model = os.path.join(MODEL_DIR, cur_model_path)
-        detect_model.load_weights(cur_model, by_name=True)
+        cur_model_weights = os.path.join(MODEL_DIR, cur_model_path)
+        detect_model.load_weights(cur_model_weights, by_name=True)
         # Traverse all the packages(the pool)
         result_of_detection = {}
         for package in self.images_pool:
             image_dir = os.path.join(DATA_DIR, package)
             images_in_package = os.listdir(image_dir)
+            # import ground truth to check out the detection result
+            instance_nums_of_images = self.count_instances_in_images(package)
             for img in images_in_package:
+                # Skip detection of those images that already used for training
                 if trained_images:
                     if img in trained_images:
                         continue
@@ -423,9 +429,25 @@ class ActiveLearningStrategy:
                 # Visualizing the detection result and save it
                 # visualize.display_instances(item, image, r['rois'], r['masks'], r['class_ids'], class_names, r['scores'])
                 # use dict to save the info of the detected instances of each images
-                result_of_detection[img] = len(r['scores'])
+                gt_instances = instance_nums_of_images[img.split('.')[0]]
+                result_of_detection[img] = abs(len(r['scores']) - gt_instances)
+        # print(result_of_detection)
         print("+++++++detection finished")
         return result_of_detection
+
+
+    def count_instances_in_images(self, package):
+        path_to_all_labels = os.path.join(ROOT_DIR, 'labels/training_data')
+        path_to_package_labels = os.path.join(path_to_all_labels, package+'_labels.csv')
+        data = open(path_to_package_labels, 'r')
+        all_labels = csv.reader(data)
+        id_list = []
+        for instance in all_labels:
+            if all_labels.line_num == 1:
+                continue
+            id_list.append(instance[0])
+        instance_list = Counter(id_list)
+        return instance_list
 
 
 if __name__ == "__main__":
