@@ -32,6 +32,7 @@ MODEL_DIR = os.path.join(ROOT_DIR, "logs")
 DATA_DIR = os.path.join(ROOT_DIR, "training_data")
 # Load initial weights from coco. Only for first time training
 COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+LOG_DIR = '/disk/vanishing_data/fn875'
 
 
 class ShapesConfig(Config):
@@ -347,11 +348,37 @@ class ActiveLearningStrategy:
         self.images_pool = images_pool
 
 
-    def max_scroe_strategy(self):
+    def random_distribution(self, init_model_infos):
         """
-        Choosing the images which has lower prediction score(<0.8)
+        Using random distribution as compare
         """
-        # for result in resultOfDetection:
+        model_folder = 'random_distribution_model'
+        all_images = []
+        for package in self.images_pool:
+            image_dir = os.path.join(DATA_DIR, package)
+            images_in_package = os.listdir(image_dir)
+            for img in images_in_package:
+                all_images.append(img)
+        total_amount = 30
+        # Select most hard images (30 as a step)
+        # Start training with select images
+        while total_amount < 300:
+            al_model = TrainingProcess()
+            al_model_data = random.sample(all_images,30)
+            for item in al_model_data:
+                all_images.remove(item)
+            total_amount += 30
+            if total_amount == 60:
+                last_model_info = init_model_infos
+            else:
+                last_model_info = al_model_info
+            last_model_path = os.path.join(last_model_info[0], last_model_info[1] + '.h5')
+            last_model_weights = os.path.join(MODEL_DIR, last_model_path)
+            al_model_info = [model_folder, '%s_images_model' % total_amount]
+            al_model.train_model(al_model_data, al_model_info, self.dataset_val, cur_model_path=last_model_weights)
+            al_model.mAP_of_model(al_model_info, self.dataset_val)
+        print("Ending training")
+
 
         pass
 
@@ -476,7 +503,7 @@ if __name__ == "__main__":
         init_model.mAP_of_model(first_model_info, dataset_val)
 
     al_model_result = ActiveLearningStrategy(dataset_val=dataset_val, images_pool=package_list)
-    al_model_result.min_detection_strategy(init_model_info)
+    al_model_result.random_distribution(init_model_info)
 
 
 
