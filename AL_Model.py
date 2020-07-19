@@ -380,24 +380,28 @@ class ActiveLearningStrategy:
         print("Ending training")
 
 
-        pass
-
     def min_detection_strategy(self, init_model_infos):
         """
         Choosing the images which has missed detection for instance
         """
-        model_folder = 'min_detection_model_v2'
+        model_folder = 'min_detection_CEAL_model'
         result = self.detection(init_model_infos)
         # here add some methods to make select more 'clever'
         rank_hard_images = sorted(result.items(), key=lambda item:item[1], reverse=True)
         total_amount = 30
+        trained_images = []
         # Select most hard images (30 as a step)
         # Start training with select images
         while rank_hard_images[0] != 0:
             al_model = TrainingProcess()
             al_model_data = []
-            for item in rank_hard_images[:30]:
+            # CEAL to get better result pick 15 most hard and 15 most easy
+            for item in rank_hard_images[:15]:
                 al_model_data.append(item[0])
+                trained_images.append(item[0])
+            for item in rank_hard_images[-15:]:
+                al_model_data.append(item[0])
+                trained_images.append(item[0])
             print('select images are:', al_model_data)
             total_amount += 30
             if total_amount == 60:
@@ -409,7 +413,7 @@ class ActiveLearningStrategy:
             al_model_info = [model_folder, '%s_images_model' % total_amount]
             al_model.train_model(al_model_data, al_model_info, self.dataset_val, cur_model_path=last_model_weights)
             al_model.mAP_of_model(al_model_info, self.dataset_val)
-            result = self.detection(al_model_info, al_model_data)
+            result = self.detection(al_model_info, trained_images)
             rank_hard_images = sorted(result.items(), key=lambda item:item[1], reverse=True)
         print("Ending selection")
 
@@ -503,7 +507,8 @@ if __name__ == "__main__":
         init_model.mAP_of_model(first_model_info, dataset_val)
 
     al_model_result = ActiveLearningStrategy(dataset_val=dataset_val, images_pool=package_list)
-    al_model_result.random_distribution(init_model_info)
+    # al_model_result.random_distribution(init_model_info)
+    al_model_result.min_detection_strategy(init_model_info)
 
 
 
