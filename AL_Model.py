@@ -44,6 +44,14 @@ class ShapesConfig(Config):
     # Give the configuration a recognizable name
     NAME = "shapes"
 
+    # Backbone network architecture
+    # Supported values are: resnet50, resnet101.
+    # You can also provide a callable that should have the signature
+    # of model.resnet_graph. If you do so, you need to supply a callable
+    # to COMPUTE_BACKBONE_SHAPE as well
+    BACKBONE = "resnet50"
+
+
     # Train on 1 GPU and 8 images per GPU. We can put multiple images on each
     # GPU because the images are small. Batch size is 8 (GPUs * images/GPU).
     GPU_COUNT = 1
@@ -377,6 +385,7 @@ class ActiveLearningStrategy:
             al_model_info = [model_folder, '%s_images_model' % total_amount]
             al_model.train_model(al_model_data, al_model_info, self.dataset_val, cur_model_path=last_model_weights)
             al_model.mAP_of_model(al_model_info, self.dataset_val)
+            del al_model
         print("Ending training")
 
 
@@ -384,7 +393,7 @@ class ActiveLearningStrategy:
         """
         Choosing the images which has missed detection for instance
         """
-        model_folder = 'min_detection_CEAL_model'
+        model_folder = 'min_detection_model_v2'
         result = self.detection(init_model_infos)
         # here add some methods to make select more 'clever'
         rank_hard_images = sorted(result.items(), key=lambda item:item[1], reverse=True)
@@ -392,16 +401,27 @@ class ActiveLearningStrategy:
         trained_images = []
         # Select most hard images (30 as a step)
         # Start training with select images
-        while rank_hard_images[0] != 0:
+        while total_amount < 150:
             al_model = TrainingProcess()
             al_model_data = []
+            """
             # CEAL to get better result pick 15 most hard and 15 most easy
-            for item in rank_hard_images[:15]:
+            for item in rank_hard_images[:20]:
                 al_model_data.append(item[0])
                 trained_images.append(item[0])
-            for item in rank_hard_images[-15:]:
+            for item in rank_hard_images[-10:]:
                 al_model_data.append(item[0])
                 trained_images.append(item[0])
+             print('select images are:', al_model_data)
+            """
+            # To keep the distribution same, take the package that have the most hard images for training
+            package_distrib = [0] * 11
+            for item in rank_hard_images[:30]:
+                package_distrib[(int(item[0].split('.')[0]) -1) // 30] += 1
+            package_id = package_distrib.index(max(package_distrib))
+            image_to_package_dir = os.path.join(DATA_DIR, "package%s" % package_id)
+            al_model_data = os.listdir(image_to_package_dir)
+            print('select package are:', package_id)
             print('select images are:', al_model_data)
             total_amount += 30
             if total_amount == 60:
@@ -415,11 +435,52 @@ class ActiveLearningStrategy:
             al_model.mAP_of_model(al_model_info, self.dataset_val)
             result = self.detection(al_model_info, trained_images)
             rank_hard_images = sorted(result.items(), key=lambda item:item[1], reverse=True)
+            del al_model
         print("Ending selection")
 
 
-    def max_entropy_strategy(self):
-        pass
+    def mean_entropy_strategy(self, init_model_infos):
+        """
+        Choosing the images which has max average entropy
+        """
+        model_folder = 'average_entropy_model'
+        result = self.detection(init_model_infos)
+        # here add some methods to make select more 'clever'
+        rank_hard_images = sorted(result.items(), key=lambda item: item[1], reverse=True)
+        total_amount = 30
+        trained_images = []
+        # Select most hard images (30 as a step)
+        # Start training with select images
+        while total_amount < 150:
+            al_model = TrainingProcess()
+            al_model_data = []
+            for item in rank_hard_images:
+                # zero detection image is most important, priority is higher.
+                if item[1] == 0:
+                    al_model_data.append(item[0])
+                    trained_images.append(item[0])
+                if len(al_model_data) == 30:
+                    break
+            if len(al_model_data) < 30:
+                for item in rank_hard_images[:(30-len(al_model_data))]:
+                    al_model_data.append(item[0])
+                    trained_images.append(item[0])
+            print('select images are:', al_model_data)
+            total_amount += 30
+            if total_amount == 60:
+                last_model_info = init_model_infos
+            else:
+                last_model_info = al_model_info
+            last_model_path = os.path.join(last_model_info[0], last_model_info[1] + '.h5')
+            last_model_weights = os.path.join(MODEL_DIR, last_model_path)
+            al_model_info = [model_folder, '%s_images_model' % total_amount]
+            al_model.train_model(al_model_data, al_model_info, self.dataset_val, cur_model_path=last_model_weights)
+            al_model.mAP_of_model(al_model_info, self.dataset_val)
+            result = self.detection(al_model_info, trained_images)
+            rank_hard_images = sorted(result.items(), key=lambda item: item[1], reverse=True)
+            del al_model
+        print("Ending selection")
+
 
     def max_gradient_decent(self):
         pass
@@ -455,15 +516,24 @@ class ActiveLearningStrategy:
                 image = skimage.io.imread(os.path.join(image_dir, img), as_gray=False)
                 # Run detection
                 results = detect_model.detect([image], verbose=0)
-                # Visualize results
                 r = results[0]
-                # Visualizing the detection result and save it
-                # visualize.display_instances(item, image, r['rois'], r['masks'], r['class_ids'], class_names, r['scores'])
+                """
+                # average entropy model
+                total_entropy = 0
+                for prob in r['scores']:
+                    total_entropy -= prob * math.log2(prob) + (1 - prob) * math.log2(1 - prob)
+                result_of_detection[img] = total_entropy / len(r['scores']) if r['scores'] != [] else total_entropy
+                """
                 # use dict to save the info of the detected instances of each images
+                # min detection model
+
                 gt_instances = instance_nums_of_images[img.split('.')[0]]
                 result_of_detection[img] = abs(len(r['scores']) - gt_instances)
+
         # print(result_of_detection)
         print("+++++++detection finished")
+        del detect_model
+        del config
         return result_of_detection
 
 
@@ -508,7 +578,10 @@ if __name__ == "__main__":
 
     al_model_result = ActiveLearningStrategy(dataset_val=dataset_val, images_pool=package_list)
     # al_model_result.random_distribution(init_model_info)
+    # al_model_result.mean_entropy_strategy(init_model_info)
     al_model_result.min_detection_strategy(init_model_info)
+    del al_model_result
+
 
 
 
